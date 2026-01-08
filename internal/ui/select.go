@@ -28,19 +28,35 @@ type fd interface {
 	Fd() uintptr
 }
 
+// Options configure selector rendering.
+type Options struct {
+	TruncateLength int
+}
+
+const defaultTruncateLength = 120
+
+func normalizeOptions(opts Options) Options {
+	if opts.TruncateLength <= 0 {
+		opts.TruncateLength = defaultTruncateLength
+	}
+	return opts
+}
+
 // SelectPrompt presents an interactive list of prompts and returns the chosen item.
 func SelectPrompt(prompts []prompt.Prompt, in io.Reader, out io.Writer) (prompt.Prompt, error) {
-	return SelectPromptWithQuery(prompts, "", search.Options{}, in, out)
+	return SelectPromptWithQuery(prompts, "", search.Options{}, Options{}, in, out)
 }
 
 // SelectPromptWithQuery enables interactive filtering seeded with an initial query.
-func SelectPromptWithQuery(prompts []prompt.Prompt, initialQuery string, opts search.Options, in io.Reader, out io.Writer) (prompt.Prompt, error) {
+func SelectPromptWithQuery(prompts []prompt.Prompt, initialQuery string, opts search.Options, uiOpts Options, in io.Reader, out io.Writer) (prompt.Prompt, error) {
 	if len(prompts) == 0 {
 		return prompt.Prompt{}, ErrNoPrompts
 	}
 
+	uiOpts = normalizeOptions(uiOpts)
+
 	if isTerminal(in) && isTerminal(out) {
-		selected, err := runInteractiveSelector(prompts, initialQuery, opts, in, out)
+		selected, err := runInteractiveSelector(prompts, initialQuery, opts, uiOpts, in, out)
 		if err == nil {
 			return selected, nil
 		}
@@ -60,8 +76,8 @@ func SelectPromptWithQuery(prompts []prompt.Prompt, initialQuery string, opts se
 	return selectPromptFallback(display, in, out)
 }
 
-func runInteractiveSelector(prompts []prompt.Prompt, initialQuery string, opts search.Options, in io.Reader, out io.Writer) (prompt.Prompt, error) {
-	model := newSelectorModel(prompts, initialQuery, opts)
+func runInteractiveSelector(prompts []prompt.Prompt, initialQuery string, opts search.Options, uiOpts Options, in io.Reader, out io.Writer) (prompt.Prompt, error) {
+	model := newSelectorModel(prompts, initialQuery, opts, uiOpts)
 
 	options := []tea.ProgramOption{
 		tea.WithInput(in),
@@ -144,6 +160,7 @@ type selectorModel struct {
 	ready      bool
 	query      string
 	filterOpts search.Options
+	uiOpts     Options
 	mode       selectorMode
 }
 
@@ -154,10 +171,11 @@ const (
 	modeNavigate
 )
 
-func newSelectorModel(prompts []prompt.Prompt, initialQuery string, opts search.Options) *selectorModel {
+func newSelectorModel(prompts []prompt.Prompt, initialQuery string, opts search.Options, uiOpts Options) *selectorModel {
 	model := &selectorModel{
 		allPrompts: append([]prompt.Prompt(nil), prompts...),
 		filterOpts: opts,
+		uiOpts:     normalizeOptions(uiOpts),
 		mode:       modeFilter,
 	}
 	model.applyQuery(initialQuery)
@@ -336,6 +354,10 @@ func (m *selectorModel) View() string {
 	if width <= 0 {
 		width = 80
 	}
+	height := m.height
+	if height <= 0 {
+		height = 24
+	}
 
 	var b strings.Builder
 	b.WriteString("\n Filter: " + m.query + "\n")
@@ -350,8 +372,15 @@ func (m *selectorModel) View() string {
 		return b.String()
 	}
 
-	for i, p := range m.filtered {
-		line := fmt.Sprintf("  %s", renderPromptTitle(p, width))
+	listMax := height - 10
+	if listMax < 3 {
+		listMax = 3
+	}
+	start, end := visibleRange(len(m.filtered), m.cursor, listMax)
+
+	for i := start; i < end; i++ {
+		p := m.filtered[i]
+		line := fmt.Sprintf("  %s", renderPromptTitle(p, width, m.uiOpts.TruncateLength))
 		if i == m.cursor {
 			line = highlight(line)
 		}
@@ -360,7 +389,7 @@ func (m *selectorModel) View() string {
 	}
 
 	b.WriteByte('\n')
-	b.WriteString(renderPreview(m.filtered[m.cursor], width))
+	b.WriteString(renderPreview(m.filtered[m.cursor], width, m.uiOpts.TruncateLength))
 	b.WriteByte('\n')
 
 	return b.String()
@@ -370,6 +399,23 @@ func sortPrompts(prompts []prompt.Prompt) {
 	sort.Slice(prompts, func(i, j int) bool {
 		return prompts[i].Name < prompts[j].Name
 	})
+}
+
+func visibleRange(total, cursor, maxItems int) (int, int) {
+	if total <= maxItems {
+		return 0, total
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	start := cursor - maxItems/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxItems > total {
+		start = total - maxItems
+	}
+	return start, start + maxItems
 }
 
 func isDigits(runes []rune) bool {
@@ -384,31 +430,35 @@ func isDigits(runes []rune) bool {
 	return true
 }
 
-func renderPromptTitle(p prompt.Prompt, width int) string {
-	name := truncate(p.Name, width-4)
+func renderPromptTitle(p prompt.Prompt, width int, truncateLength int) string {
+	limit := width - 4
+	if truncateLength > 0 && truncateLength < limit {
+		limit = truncateLength
+	}
+	name := truncate(p.Name, limit)
 	if len(p.Tags) == 0 {
 		return name
 	}
 	tagLine := strings.Join(p.Tags, ", ")
 	full := fmt.Sprintf("%s  [%s]", name, tagLine)
-	return truncate(full, width-4)
+	return truncate(full, limit)
 }
 
-func renderPreview(p prompt.Prompt, width int) string {
+func renderPreview(p prompt.Prompt, width int, truncateLength int) string {
 	width = max(width-2, 40)
 
 	var sections []string
 
 	if summary := frontMatterString(p.FrontMatter, "summary"); summary != "" {
-		sections = append(sections, "Summary:\n"+indent(wrap(summary, width), "  "))
+		sections = append(sections, "Summary:\n"+indent(wrap(limitText(summary, truncateLength), width), "  "))
 	}
 
 	if len(p.Tags) > 0 {
-		sections = append(sections, "Tags: "+strings.Join(p.Tags, ", "))
+		sections = append(sections, "Tags: "+limitText(strings.Join(p.Tags, ", "), truncateLength))
 	}
 
 	if preview := snippet(p.Content, 5); preview != "" {
-		sections = append(sections, "Preview:\n"+indent(wrap(preview, width), "  "))
+		sections = append(sections, "Preview:\n"+indent(wrap(limitText(preview, truncateLength), width), "  "))
 	}
 
 	return strings.Join(sections, "\n\n")
@@ -520,6 +570,13 @@ func truncate(text string, length int) string {
 	}
 
 	return string(runes[:length-1]) + "…"
+}
+
+func limitText(text string, limit int) string {
+	if limit <= 0 {
+		return text
+	}
+	return truncate(text, limit)
 }
 
 func highlight(text string) string {

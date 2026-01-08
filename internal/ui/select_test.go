@@ -143,7 +143,7 @@ func TestSelectorModelHandlesArrowNavigation(t *testing.T) {
 		{Name: "gamma"},
 	}
 
-	model := newSelectorModel(prompts, "", search.Options{})
+	model := newSelectorModel(prompts, "", search.Options{}, Options{})
 	if model.cursor != 0 {
 		t.Fatalf("expected initial cursor at 0, got %d", model.cursor)
 	}
@@ -201,7 +201,7 @@ func TestSelectorModelFiltersWhileTyping(t *testing.T) {
 		{Name: "code-review"},
 	}
 
-	model := newSelectorModel(prompts, "", search.Options{})
+	model := newSelectorModel(prompts, "", search.Options{}, Options{})
 	assertPromptNames(t, model.filtered, []string{"brainstorm", "code-review", "product-brief"})
 
 	next, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
@@ -229,7 +229,7 @@ func TestSelectorModelBackspaceRestoresResults(t *testing.T) {
 		{Name: "alpine"},
 	}
 
-	model := newSelectorModel(prompts, "", search.Options{})
+	model := newSelectorModel(prompts, "", search.Options{}, Options{})
 
 	steps := []tea.KeyMsg{
 		{Type: tea.KeyRunes, Runes: []rune{'a'}},
@@ -260,7 +260,7 @@ func TestSelectorModelInitialQuery(t *testing.T) {
 		{Name: "alpine"},
 	}
 
-	model := newSelectorModel(prompts, "alp", search.Options{})
+	model := newSelectorModel(prompts, "alp", search.Options{}, Options{})
 	assertPromptNames(t, model.filtered, []string{"alpha", "alpine"})
 
 	if model.query != "alp" {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -40,11 +41,19 @@ type rawSettings struct {
 	UI          UISettings          `toml:"ui"`
 }
 
+// DefaultPath returns the default configuration path for this CLI.
+func DefaultPath() string {
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".config", "pmc", "settings.toml")
+	}
+	return "config/settings.toml"
+}
+
 // Load reads settings from the provided path. Missing or malformed files fall back to defaults.
 func Load(path string) Settings {
 	defaults := Settings{
-		DefaultDirs: []string{"./prompts"},
-		CacheDir:    "./.pm-cache",
+		DefaultDirs: []string{"~/prompts"},
+		CacheDir:    "~/.cache/pmc",
 		FileSystem: FileSystemSettings{
 			Extensions:     []string{".md", ".txt"},
 			IgnorePatterns: []string{".DS_Store"},

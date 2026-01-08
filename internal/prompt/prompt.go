@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -98,9 +99,16 @@ func LoadFromDirs(dirs []string, opts Options) ([]Prompt, error) {
 	return prompts, nil
 }
 
-func shouldIgnore(path string, patterns []string) bool {
+func shouldIgnore(filePath string, patterns []string) bool {
+	base := filepath.Base(filePath)
+	slashPath := filepath.ToSlash(filePath)
 	for _, pattern := range patterns {
-		matched, err := filepath.Match(pattern, filepath.Base(path))
+		matched, err := filepath.Match(pattern, base)
+		if err == nil && matched {
+			return true
+		}
+		normalizedPattern := filepath.ToSlash(pattern)
+		matched, err = path.Match(normalizedPattern, slashPath)
 		if err == nil && matched {
 			return true
 		}
