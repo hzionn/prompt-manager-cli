@@ -29,21 +29,41 @@ Make sure you have [Go 1.24+](https://golang.org/doc/install) installed.
 ```bash
 git clone https://github.com/hzionn/prompt-manager-cli.git
 cd prompt-manager-cli
-go build ./cmd/pm
+go install ./cmd/pm
 ```
 
-This will produce a `pm` binary in the current directory.
+This installs `pm` into `$(go env GOBIN)` (or `$(go env GOPATH)/bin` if `GOBIN` is unset). Ensure that directory is on your `PATH`.
 
-Then point the prompt directory to your desired directory in `settings.toml`. Multiple directories are supported.
+Copy the starter config and point the prompt directory to your desired location. Multiple directories are supported.
+
+```bash
+mkdir -p ~/.config/pmc
+cp config/settings.toml ~/.config/pmc/settings.toml
+```
 
 ### Quick Start
 
 ```bash
-# Make it globally accessible (optional)
-sudo mv pm /usr/local/bin/pm
-
 # Verify installation
 pm --help
+```
+
+### Shell Completions
+
+Optional, but recommended for tab-completion of subcommands and prompt names.
+
+Generate completion scripts:
+
+```bash
+pm completion zsh
+pm completion bash
+pm completion fish
+```
+
+Enable zsh completions by adding this line to `~/.zshrc` (requires `pm` on your `PATH`):
+
+```bash
+source <(pm completion zsh)
 ```
 
 ## Usage
@@ -90,7 +110,7 @@ pm ls
 
 #### Cat
 
-Display a specific prompt by name:
+Display a specific prompt by name (exact match, alias, normalized name, or fuzzy match):
 
 ```bash
 pm cat "code review"
@@ -98,7 +118,7 @@ pm cat "code review"
 
 #### Mesh
 
-Combine multiple prompts together:
+Combine multiple prompts together (each name supports the same matching rules as `cat`):
 
 ```bash
 pm mesh "prompt1" "prompt2"
@@ -116,6 +136,7 @@ pm mesh "system-prompt" "context-prompt" < user-input.txt
 - `--query <query>` - Provide a query for non-interactive selection
 - `--copy` - Copy the chosen prompt to clipboard
 - `--interactive` - Force interactive selection mode
+- `--limit <n>` - Limit search results (search only)
 
 ### Examples
 
@@ -144,14 +165,14 @@ pm mesh "system-prompt" "user-prompt" | pbcopy
 
 ## Configuration
 
-prompt-manager-cli reads configuration from `config/settings.toml`. Create or modify this file to customize behavior:
+prompt-manager-cli reads configuration from `~/.config/pmc/settings.toml`. Start from `config/settings.toml` in the repo, then edit to customize behavior:
 
 ```toml
 # Default directories where prompts are stored
-default_dir = ["./prompts"]
+default_dir = ["~/prompts"]
 
 # Cache directory for temporary data
-cache_dir = "./.pm-cache"
+cache_dir = "~/.cache/pmc"
 
 # File system settings
 [file_system]

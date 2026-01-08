@@ -1,28 +1,13 @@
-# prompt-manager-cli Configuration
-# This is the main configuration file for the prompt manager
+default_dir = ["./prompts"]
+cache_dir = "./.pm-cache"
 
-# Default directories where prompts are stored
-# Can be a single string or an array of paths
-default_dir = ["./testdata", "../prompts"]
-
-# File system settings
 [file_system]
-# File extensions to look for when scanning directories
 extensions = [".md", ".txt"]
-
-# Patterns to ignore when scanning (glob patterns)
 ignore_patterns = [".DS_Store"]
-
-# Maximum file size to load (in KB)
-# Files larger than this will be skipped
 max_file_size_kb = 128
 
-# Fuzzy search configuration
 [fuzzy_search]
-# Maximum number of search results to return
 max_results = 20
 
-# UI configuration
 [ui]
-# Maximum length to truncate prompt display
 truncate_length = 120
